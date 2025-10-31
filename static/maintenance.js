@@ -1,7 +1,7 @@
 document.addEventListener("DOMContentLoaded", () => {
     fetchMaintenance();
 
-    const form = document.getElementById("maintenanceForm");
+    const form = document.getElementById("maintenance-form"); // ✅ FIXED ID
     form.addEventListener("submit", handleFormSubmit);
 });
 
@@ -9,7 +9,7 @@ function fetchMaintenance() {
     fetch("/api/maintenance")
         .then(res => res.json())
         .then(data => {
-          console.log(data); // 👈 ADD THIS LINE
+            console.log(data); // ✅ Check what's returned
             const tbody = document.getElementById("maintenance-table");
             tbody.innerHTML = "";
 
@@ -23,8 +23,14 @@ function fetchMaintenance() {
                     <td>${new Date(record.reported_on).toLocaleDateString()}</td>
                     <td>${record.status}</td>
                     <td>
-                        <button class="btn btn-sm btn-primary" onclick="populateForm(${record.issue_id}, ${record.room_id}, '${record.issue_description}', '${record.date_reported}', '${record.status}')">Edit</button>
-                        <button class="btn btn-sm btn-danger" onclick="deleteRecord(${record.issue_id})">Delete</button>
+                        <button class="btn btn-sm btn-primary" onclick="populateForm(
+                            ${record.maintenance_id}, 
+                            ${record.room_id}, 
+                            \`${record.issue.replace(/`/g, "\\`")}\`, 
+                            '${record.reported_on}', 
+                            '${record.status}'
+                        )">Edit</button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteRecord(${record.maintenance_id})">Delete</button>
                     </td>
                 `;
                 tbody.appendChild(row);
@@ -35,17 +41,25 @@ function fetchMaintenance() {
         });
 }
 
-function populateForm(issue_id, room_id, issue_description, date_reported, status) {
-    document.getElementById("issue_id").value = issue_id;
+function populateForm(maintenance_id, room_id, issue_description, reported_on, status) {
+    document.getElementById("issue_id").value = maintenance_id;
     document.getElementById("room_id").value = room_id;
     document.getElementById("issue_description").value = issue_description;
-    document.getElementById("date_reported").value = date_reported.slice(0, 10);
+
+    if (reported_on) {
+        const date = new Date(reported_on);
+        if (!isNaN(date)) {
+            const formattedDate = date.toISOString().split('T')[0];
+            document.getElementById("date_reported").value = formattedDate;
+        }
+    }
+
     document.getElementById("status").value = status;
 }
 
 function handleFormSubmit(event) {
     event.preventDefault();
-
+    const form = event.target;
     const issue_id = document.getElementById("issue_id").value;
     const payload = {
         room_id: parseInt(document.getElementById("room_id").value),
@@ -54,6 +68,8 @@ function handleFormSubmit(event) {
         status: document.getElementById("status").value
     };
 
+      console.log("Submitting payload:", payload); // 👈 Add this
+     
     const url = issue_id ? `/api/maintenance/${issue_id}` : "/api/maintenance";
     const method = issue_id ? "PUT" : "POST";
 
@@ -67,7 +83,7 @@ function handleFormSubmit(event) {
         return res.json();
     })
     .then(() => {
-        document.getElementById("maintenanceForm").reset();
+        document.getElementById("maintenance-form").reset(); // ✅ FIXED ID
         fetchMaintenance();
     })
     .catch(err => {
@@ -76,10 +92,10 @@ function handleFormSubmit(event) {
     });
 }
 
-function deleteRecord(issue_id) {
+function deleteRecord(maintenance_id) {
     if (!confirm("Are you sure you want to delete this record?")) return;
 
-    fetch(`/api/maintenance/${issue_id}`, {
+    fetch(`/api/maintenance/${maintenance_id}`, {
         method: "DELETE"
     })
     .then(res => {
@@ -94,3 +110,13 @@ function deleteRecord(issue_id) {
         alert("Failed to delete maintenance record");
     });
 }
+document.addEventListener("DOMContentLoaded", () => {
+    const addBtn = document.getElementById("addMaintenanceBtn");
+
+    if (addBtn) {
+        addBtn.addEventListener("click", () => {
+            document.getElementById("maintenance-form").reset();
+            document.getElementById("issue_id").value = ""; // ← Clears old ID
+        });
+    }
+});

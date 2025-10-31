@@ -1,82 +1,251 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Student Allocations</title>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Allocations</title>
 
-  <!-- Bootstrap CSS CDN -->
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+    <!-- Bootstrap CSS CDN -->
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
 
-  <!-- Optional: Your custom style overrides -->
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
-</head>
-<body>
+    <!-- Optional: Your custom style overrides -->
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='style.css') }}"
+    />
+  </head>
+  <body>
+    <!-- HEADER -->
+    <header class="bg-primary text-white text-center py-4">
+      <h1>HostelManager</h1>
+      <h2 class="h5">Welcome to the Allocations Page</h2>
+    </header>
 
-  <!-- HEADER -->
-  <header class="bg-primary text-white text-center py-4">
-    <h1>HostelManager</h1>
-    <h2 class="h5">Welcome to the Allocations Page</h2>
-  </header>
-
-  <!-- NAVIGATION -->
-  <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-    <div class="container-fluid">
-      <a class="navbar-brand" href="/">Dashboard</a>
-      <div class="collapse navbar-collapse">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item"><a class="nav-link" href="/students">Students</a></li>
-          <li class="nav-item"><a class="nav-link" href="/rooms">Rooms</a></li>
-          <li class="nav-item"><a class="nav-link active" aria-current="page" href="#">Allocations</a></li>
-          <li class="nav-item"><a class="nav-link" href="/payments">Payments</a></li>
-          <li class="nav-item"><a class="nav-link" href="/maintenance">Maintenance</a></li>
-        </ul>
-         {% if session.admin %}
-        <span class="navbar-text text-white ms-auto">
-          Logged in as: <strong>{{ session.admin }}</strong>
-          <a href="{{ url_for('logout') }}" class="text-white text-decoration-underline ms-2">Logout</a>
-        </span>
-        {% endif %}
+    <!-- NAVIGATION -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+      <div class="container-fluid">
+        <a class="navbar-brand" href="/">Dashboard</a>
+        <div class="collapse navbar-collapse">
+          <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item">
+              <a class="nav-link" href="/students">Students</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/rooms">Rooms</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link active" aria-current="page" href="#"
+                >Allocations</a
+              >
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/payments">Payments</a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="/maintenance">Maintenance</a>
+            </li>
+          </ul>
+          {% if session.admin %}
+          <span class="navbar-text text-white ms-auto">
+            Logged in as: <strong>{{ session.admin }}</strong>
+            <a
+              href="{{ url_for('logout') }}"
+              class="text-white text-decoration-underline ms-2"
+              >Logout</a
+            >
+          </span>
+          {% endif %}
+        </div>
       </div>
-    </div>
-  </nav>
+    </nav>
 
-  <!-- MAIN CONTENT -->
-  <main class="container my-5">
-    <h2 class="mb-4">Current Student Allocations</h2>
-    <div class="table-responsive">
-      <table class="table table-striped table-bordered table-hover align-middle">
-        <thead class="table-dark">
-          <tr>
-            <th>ID</th>
-            <th>Student</th>
-            <th>Room Number</th>
-            <th>Hostel</th>
-            <th>Date</th>
-          </tr>
-        </thead>
-        <tbody id="allocations-table-body">
-          <tr>
-            <td colspan="5" class="text-center">Loading allocations...</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  </main>
+    <!-- MAIN CONTENT -->
+    <main class="container my-5">
+      <h2 class="mb-4">Current Student Allocations</h2>
+      <div class="table-responsive">
+        <!-- Add Allocation Form -->
+        <div class="card mb-4">
+          <div class="card-body">
+            <h5 class="card-title">Add New Allocation</h5>
+            <form id="allocation-form" class="row g-3">
+              <!-- Student -->
+              <div class="col-md-6">
+                <label for="student-select" class="form-label">Student</label>
+                <select
+                  id="student-select"
+                  class="form-select"
+                  required
+                ></select>
+              </div>
 
-  <!-- FOOTER -->
-  <footer
+              <!-- Hostel -->
+              <div class="col-md-6">
+                <label for="hostel-select" class="form-label">Hostel</label>
+                <select
+                  id="hostel-select"
+                  class="form-select"
+                  required
+                ></select>
+              </div>
+
+              <!-- Room -->
+              <div class="col-md-6">
+                <label for="room-select" class="form-label">Room</label>
+                <select id="room-select" class="form-select" required></select>
+              </div>
+
+              <!-- Date -->
+              <div class="col-md-6">
+                <label for="date-allocated" class="form-label"
+                  >Date Allocated</label
+                >
+                <input
+                  type="date"
+                  id="date-allocated"
+                  class="form-control"
+                  required
+                />
+              </div>
+
+              <div class="col-12 text-end">
+                <button type="submit" class="btn btn-success">Allocate</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <table
+          class="table table-striped table-bordered table-hover align-middle"
+        >
+          <thead class="table-dark">
+            <tr>
+              <th>ID</th>
+              <th>Student</th>
+              <th>Room Number</th>
+              <th>Hostel</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="allocations-table-body">
+            <tr>
+              <td colspan="5" class="text-center">Loading allocations...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Edit Allocation Modal -->
+      <div
+        class="modal fade"
+        id="editAllocationModal"
+        tabindex="-1"
+        aria-labelledby="editAllocationModalLabel"
+        aria-hidden="true"
+      >
+        <div class="modal-dialog modal-lg">
+          <div class="modal-content">
+            <form id="edit-allocation-form">
+              <div class="modal-header">
+                <h5 class="modal-title" id="editAllocationModalLabel">
+                  Edit Allocation
+                </h5>
+                <button
+                  type="button"
+                  class="btn-close"
+                  data-bs-dismiss="modal"
+                  aria-label="Close"
+                ></button>
+              </div>
+              <div class="modal-body row g-3">
+                <!-- Hidden allocation ID -->
+                <input type="hidden" id="edit-allocation-id" />
+
+                <!-- Student -->
+                <div class="col-md-6">
+                  <label for="edit-student-select" class="form-label"
+                    >Student</label
+                  >
+                  <select
+                    id="edit-student-select"
+                    class="form-select"
+                    required
+                  ></select>
+                </div>
+
+                <!-- Hostel -->
+                <div class="col-md-6">
+                  <label for="edit-hostel-select" class="form-label"
+                    >Hostel</label
+                  >
+                  <select
+                    id="edit-hostel-select"
+                    class="form-select"
+                    required
+                  ></select>
+                </div>
+
+                <!-- Room -->
+                <div class="col-md-6">
+                  <label for="edit-room-select" class="form-label">Room</label>
+                  <select
+                    id="edit-room-select"
+                    class="form-select"
+                    required
+                  ></select>
+                </div>
+
+                <!-- Date -->
+                <div class="col-md-6">
+                  <label for="edit-date-allocated" class="form-label"
+                    >Date</label
+                  >
+                  <input
+                    type="date"
+                    id="edit-date-allocated"
+                    class="form-control"
+                    required
+                  />
+                </div>
+              </div>
+              <div class="modal-footer">
+                <button
+                  type="button"
+                  class="btn btn-secondary"
+                  data-bs-dismiss="modal"
+                >
+                  Cancel
+                </button>
+                <button type="submit" class="btn btn-primary">
+                  Update Allocation
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer
       class="text-center text-white py-3 mt-5"
       style="background-color: #003366"
     >
       <p class="mb-0">&copy; 2025 HostelManager</p>
     </footer>
 
-  <!-- Bootstrap JS Bundle (optional if you need dropdowns/collapse) -->
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" defer></script>
-  
-  <!-- Your JS -->
-  <script src="{{ url_for('static', filename='allocations.js') }}" defer></script>
+    <!-- Bootstrap JS Bundle (optional if you need dropdowns/collapse) -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+      defer
+    ></script>
 
-</body>
+    <!-- Your JS -->
+    <script
+      src="{{ url_for('static', filename='allocations.js') }}"
+      defer
+    ></script>
+  </body>
 </html>

@@ -5,15 +5,78 @@
 # Description: This app handles authentication and CRUD operations
 #              for students, rooms, allocations, payments, and maintenance.
 # ==========================================
+# ==========================================
+# Importing Required Libraries and Modules
+# ==========================================
 
-from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash
+# Flask core modules for building web applications
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session, flash, send_file
+# Flask → main framework for creating the web app
+# request → handles data sent from the frontend (like forms or JSON)
+# jsonify → converts Python data into JSON format for API responses
+# render_template → displays HTML pages stored in the 'templates' folder
+# redirect → sends users to another route or page
+# url_for → helps generate dynamic URLs for routes
+# session → stores user data temporarily during a login session
+# flash → sends one-time messages to users (e.g., “Login successful”)
+# send_file → allows sending files (like PDFs or images) from the server to the browser
+
+# CORS (Cross-Origin Resource Sharing) allows the frontend (e.g., JavaScript) 
+# to communicate with the Flask backend, even if they are on different domains or ports
 from flask_cors import CORS
+
+# pyodbc is a Python library that lets your app connect and run SQL queries 
+# on Microsoft SQL Server databases
 import pyodbc
+
+# os provides access to environment variables and operating system features
+# (useful for reading sensitive information like database credentials)
 import os
+
+# dotenv lets you load environment variables from a '.env' file 
+# so you don’t expose passwords or connection strings in your code
 from dotenv import load_dotenv
+
+# BytesIO allows handling files or binary data (like PDFs) directly in memory 
+# instead of saving them temporarily to disk
+from io import BytesIO
+
+# reportlab is used to generate PDF documents programmatically
+# letter defines the paper size (8.5 x 11 inches)
+from reportlab.lib.pagesizes import letter  # type: ignore
+
+# canvas provides functions to draw text, shapes, and images on the PDF
+from reportlab.pdfgen import canvas  # type: ignore
+
+# random is used to generate random numbers or selections — 
+# useful for generating unique IDs, codes, or filenames
+import random
+
+# string gives access to string constants (like uppercase letters or digits)
+# often used together with random to generate random strings or passwords
+import string
 
 # Load environment variables from .env file
 load_dotenv()
+
+
+def _generate_receipt_no(length: int = 8) -> str:
+    """e.g. 069A8C18 — uppercase letters + digits, fixed length"""
+    alphabet = string.ascii_uppercase + string.digits
+    return ''.join(random.choices(alphabet, k=length))
+
+def _get_unique_receipt_no(cursor, max_attempts: int = 5) -> str:
+    """Try a few times to avoid collisions (DB also has UNIQUE constraint)."""
+    for _ in range(max_attempts):
+        candidate = _generate_receipt_no()
+        cursor.execute("SELECT 1 FROM Payments WHERE receipt_no = ?", (candidate,))
+        if not cursor.fetchone():
+            return candidate
+    raise Exception("Could not generate a unique receipt number after several attempts")
+
+
+
+
 
 # Initialize Flask app and enable CORS
 app = Flask(__name__)
@@ -493,16 +556,93 @@ def api_update_student(student_id):
     return jsonify({"message": "Student updated successfully"})
 
 # Delete a student
+# Delete a student
 @app.route("/api/students/<int:student_id>", methods=["DELETE"])
 @login_required
 def api_delete_student(student_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Students WHERE student_id=?", (student_id,))
-    conn.commit()
+
+    try:
+        # Step 1: Check for Allocations
+        cursor.execute("SELECT COUNT(*) FROM Allocations WHERE student_id = ?", (student_id,))
+        allocation_count = cursor.fetchone()[0]
+
+        # Step 2: Check for Payments
+        cursor.execute("SELECT COUNT(*) FROM Payments WHERE student_id = ?", (student_id,))
+        payment_count = cursor.fetchone()[0]
+
+        if allocation_count > 0 or payment_count > 0:
+            related_tables = []
+            if allocation_count > 0:
+                related_tables.append("allocations")
+            if payment_count > 0:
+                related_tables.append("payments")
+
+            return jsonify({
+                "error": f"Cannot delete student — they still have records in {', '.join(related_tables)}. "
+                         "Please remove those records first."
+            }), 400
+
+        # Step 3: Safe to delete
+        cursor.execute("DELETE FROM Students WHERE student_id = ?", (student_id,))
+        conn.commit()
+
+        return jsonify({"message": "Student deleted successfully"}), 200
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": f"An error occurred: {str(e)}"}), 500
+
+    finally:
+        cursor.close()
+        conn.close()
+
+# ----------------------------------------
+# Export students to PDF
+
+@app.route('/api/students/export-pdf', methods=['GET'])
+@login_required
+def export_students_pdf():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT student_id, name, matric_number, department, level, gender FROM Students")
+    students = cursor.fetchall()
     cursor.close()
     conn.close()
-    return jsonify({"message": "Student deleted successfully"})
+
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer, pagesize=letter)
+    width, height = letter
+
+    # Title
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(200, height - 50, "Student List")
+
+    # Table headers
+    pdf.setFont("Helvetica-Bold", 12)
+    headers = ["ID", "Name", "Matric No", "Department", "Level", "Gender"]
+    y = height - 80
+    x_positions = [50, 90, 200, 300, 420, 480]
+    for i, header in enumerate(headers):
+        pdf.drawString(x_positions[i], y, header)
+
+    # Table rows
+    pdf.setFont("Helvetica", 11)
+    y -= 20
+    for student in students:
+        if y < 50:  # Start new page if near bottom
+            pdf.showPage()
+            y = height - 50
+        for i, value in enumerate(student):
+            pdf.drawString(x_positions[i], y, str(value))
+        y -= 20
+
+    pdf.save()
+    buffer.seek(0)
+
+    return send_file(buffer, as_attachment=True, download_name="students.pdf", mimetype='application/pdf')
+
 
 
 # ----------------------------------------
@@ -568,11 +708,39 @@ def api_update_room(room_id):
 def api_delete_room(room_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Rooms WHERE room_id=?", (room_id,))
+
+    # Check for allocations first
+    cursor.execute("SELECT COUNT(*) FROM Allocations WHERE room_id = ?", (room_id,))
+    count = cursor.fetchone()[0]
+
+    if count > 0:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Room cannot be deleted. It is currently allocated."}), 400
+
+    # Safe to delete
+    cursor.execute("DELETE FROM Rooms WHERE room_id = ?", (room_id,))
     conn.commit()
     cursor.close()
     conn.close()
     return jsonify({"message": "Room deleted successfully"})
+
+
+@app.route("/api/rooms/available", methods=["GET"])
+@login_required
+def api_check_available_rooms():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT COUNT(*) FROM Rooms WHERE current_occupants < capacity
+    """)
+    available_count = cursor.fetchone()[0]
+    cursor.close()
+    conn.close()
+    
+    if available_count == 0:
+        return jsonify({"available": False})
+    return jsonify({"available": True})
 
 
 # ----------------------------------------
@@ -584,56 +752,137 @@ def api_get_allocations():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT A.allocations_id, S.name, S.matric_number, R.room_number
-        FROM Allocations A
-        JOIN Students S ON A.student_id = S.student_id
-        JOIN Rooms R ON A.room_id = R.room_id
-    """)
+       SELECT A.allocations_id, S.name, S.matric_number, R.room_number, R.hostel_name, A.date_allocated
+       FROM Allocations A
+       JOIN Students S ON A.student_id = S.student_id
+       JOIN Rooms R ON A.room_id = R.room_id
+""") 
     rows = cursor.fetchall()
     cursor.close()
     conn.close()
     return jsonify([
-        {
-            "allocations_id": r[0],
-            "name": r[1],
-            "matric": r[2],
-            "room_number": r[3]
+        { "allocations_id": r[0],
+          "name": r[1],
+          "matric": r[2],
+          "room_number": r[3],
+          "hostel_name": r[4],
+          "allocated_date": r[5].strftime("%Y-%m-%d") if r[5] else None
         }
         for r in rows
     ])
-
-# Create allocation
+# Create allocation with transaction + rollback + payment check
 @app.route("/api/allocations", methods=["POST"])
 @login_required
 def api_create_allocation():
     data = request.json
+    student_id = data["student_id"]
+    room_id = data["room_id"]
+    date_allocated = data["date_allocated"]
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO Allocations (student_id, room_id)
-        VALUES (?, ?)
-    """, (data["student_id"], data["room_id"]))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return jsonify({"message": "Allocation created successfully"}), 201
+
+    try:
+        # 🔒 Require at least one successful payment before allocation
+        # If you want to require a specific purpose (e.g., Hostel Fee), add AND purpose = 'Hostel Fee'
+        cursor.execute("""
+            SELECT TOP 1 1
+            FROM Payments
+            WHERE student_id = ? AND status = 'Paid'
+        """, (student_id,))
+        has_paid = cursor.fetchone()
+        if not has_paid:
+            return jsonify({"error": "Payment required before allocation"}), 403
+
+        # ✅ Check if student is already allocated
+        cursor.execute("SELECT 1 FROM Allocations WHERE student_id = ?", (student_id,))
+        if cursor.fetchone():
+            return jsonify({"error": "Student already has an allocation"}), 400
+
+        # ✅ Check room exists & capacity
+        cursor.execute("SELECT capacity, current_occupants FROM Rooms WHERE room_id = ?", (room_id,))
+        room = cursor.fetchone()
+        if not room:
+            return jsonify({"error": "Room not found"}), 404
+
+        capacity, current_occupants = room
+        if current_occupants >= capacity:
+            return jsonify({"error": "Room is already full"}), 400
+
+        # 🔁 Transaction: insert allocation + bump occupants
+        cursor.execute("""
+            INSERT INTO Allocations (student_id, room_id, date_allocated)
+            VALUES (?, ?, ?)
+        """, (student_id, room_id, date_allocated))
+        cursor.execute("""
+            UPDATE Rooms SET current_occupants = current_occupants + 1
+            WHERE room_id = ?
+        """, (room_id,))
+        conn.commit()
+        return jsonify({"message": "Allocation created successfully"}), 201
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": f"Failed to create allocation: {str(e)}"}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
 
 # Update allocation
 @app.route("/api/allocations/<int:allocations_id>", methods=["PUT"])
 @login_required
 def api_update_allocation(allocations_id):
     data = request.json
+    new_student_id = data["student_id"]
+    new_room_id = data["room_id"]
+
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # 1. Get current allocation details
+    cursor.execute("SELECT room_id, student_id FROM Allocations WHERE allocations_id=?", (allocations_id,))
+    current_allocation = cursor.fetchone()
+    if not current_allocation:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Allocation not found"}), 404
+
+    old_room_id, old_student_id = current_allocation
+
+    # 2. If moving to a new room, check capacity
+    if old_room_id != new_room_id:
+        cursor.execute("SELECT capacity, current_occupants FROM Rooms WHERE room_id=?", (new_room_id,))
+        room = cursor.fetchone()
+        if not room:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "New room not found"}), 404
+
+        capacity, current_occupants = room
+        if current_occupants >= capacity:
+            cursor.close()
+            conn.close()
+            return jsonify({"error": "New room is already full"}), 400
+
+    # 3. Update the allocation record
     cursor.execute("""
         UPDATE Allocations
         SET student_id=?, room_id=?
         WHERE allocations_id=?
-    """, (data["student_id"], data["room_id"], allocations_id))
+    """, (new_student_id, new_room_id, allocations_id))
+
+    # 4. Update occupants if the room changed
+    if old_room_id != new_room_id:
+        cursor.execute("UPDATE Rooms SET current_occupants = current_occupants - 1 WHERE room_id=?", (old_room_id,))
+        cursor.execute("UPDATE Rooms SET current_occupants = current_occupants + 1 WHERE room_id=?", (new_room_id,))
+
     conn.commit()
     cursor.close()
     conn.close()
     return jsonify({"message": "Allocation updated successfully"})
+
 
 # Delete allocation
 @app.route("/api/allocations/<int:allocations_id>", methods=["DELETE"])
@@ -641,11 +890,28 @@ def api_update_allocation(allocations_id):
 def api_delete_allocation(allocations_id):
     conn = get_db_connection()
     cursor = conn.cursor()
+
+    # 1. Find allocation before deleting
+    cursor.execute("SELECT room_id FROM Allocations WHERE allocations_id=?", (allocations_id,))
+    allocation = cursor.fetchone()
+    if not allocation:
+        cursor.close()
+        conn.close()
+        return jsonify({"error": "Allocation not found"}), 404
+
+    room_id = allocation[0]
+
+    # 2. Delete the allocation
     cursor.execute("DELETE FROM Allocations WHERE allocations_id=?", (allocations_id,))
+
+    # 3. Reduce occupants count for that room
+    cursor.execute("UPDATE Rooms SET current_occupants = current_occupants - 1 WHERE room_id=?", (room_id,))
+
     conn.commit()
     cursor.close()
     conn.close()
     return jsonify({"message": "Allocation deleted successfully"})
+
 
 
 
@@ -660,13 +926,15 @@ def api_get_payments():
     cursor.execute("""
         SELECT 
             P.payment_id, 
+            S.student_id,
             S.name, 
             S.matric_number, 
             P.amount,
             P.payment_date,
             P.payment_method, 
             P.purpose, 
-            P.status
+            P.status,
+            P.receipt_no
         FROM Payments P
         JOIN Students S ON P.student_id = S.student_id
     """)
@@ -676,62 +944,155 @@ def api_get_payments():
     return jsonify([
         {
             "payment_id": r[0],
-            "student_name": r[1],
-            "matric": r[2],
-            "amount": r[3],
-            "payment_date": r[4],
-            "method": r[5],
-            "purpose": r[6],
-            "status": r[7]
+            "student_id": r[1],
+            "student_name": r[2],
+            "matric": r[3],
+            "amount": r[4],
+            "payment_date": r[5],
+            "method": r[6],
+            "purpose": r[7],
+            "status": r[8],
+            "receipt_no": r[9]
         }
         for r in rows
     ])
 
 
-# Create payment
+# Create payment (auto-generate receipt, validate, rollback on error)
 @app.route("/api/payments", methods=["POST"])
 @login_required
-def api_create_payment():
+def api_add_payment():
     data = request.json
+    student_id = data.get("student_id")
+    payment_method = data.get("payment_method")
+    amount = data.get("amount")
+    purpose = data.get("purpose")
+    status = data.get("status")             # "Paid" / "Pending"
+    payment_date = data.get("payment_date") # optional: 'YYYY-MM-DD'
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        INSERT INTO Payments (student_id, payment_method, purpose, status)
-        VALUES (?, ?, ?, ?)
-    """, (data["student_id"], data["payment_method"], data["purpose"], data["status"]))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return jsonify({"message": "Payment created successfully"}), 201
+    try:
+        # Basic validation
+        if not student_id or not amount or not payment_method or not purpose or not status:
+            return jsonify({"error": "Missing required fields"}), 400
+
+        # Ensure student exists
+        cursor.execute("SELECT 1 FROM Students WHERE student_id = ?", (student_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Student not found"}), 404
+
+        # Normalize amount
+        try:
+            amount = float(amount)
+        except:
+            return jsonify({"error": "Amount must be numeric"}), 400
+
+        # Generate a unique receipt number
+        receipt_no = _get_unique_receipt_no(cursor)
+
+        # Insert
+        if payment_date:
+            cursor.execute("""
+                INSERT INTO Payments (student_id, payment_method, amount, purpose, status, receipt_no, payment_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (student_id, payment_method, amount, purpose, status, receipt_no, payment_date))
+        else:
+            cursor.execute("""
+                INSERT INTO Payments (student_id, payment_method, amount, purpose, status, receipt_no)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (student_id, payment_method, amount, purpose, status, receipt_no))
+
+        conn.commit()
+        return jsonify({"message": "Payment added successfully", "receipt_no": receipt_no}), 201
+
+    except Exception as e:
+        conn.rollback()
+        print("Error inserting payment:", e)
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
 
 # Update payment
 @app.route("/api/payments/<int:payment_id>", methods=["PUT"])
 @login_required
 def api_update_payment(payment_id):
     data = request.json
+    student_id = data.get("student_id")
+    payment_method = data.get("payment_method")
+    amount = data.get("amount")
+    purpose = data.get("purpose")
+    status = data.get("status")
+    receipt_no = data.get("receipt_no")
+    payment_date = data.get("payment_date")
+
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("""
-        UPDATE Payments
-        SET student_id=?, payment_method=?, purpose=?, status=?
-        WHERE payment_id=?
-    """, (data["student_id"], data["payment_method"], data["purpose"], data["status"], payment_id))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return jsonify({"message": "Payment updated successfully"})
+    try:
+        # Ensure payment exists
+        cursor.execute("SELECT 1 FROM Payments WHERE payment_id = ?", (payment_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Payment not found"}), 404
 
-# Delete payment
+        # Validate student exists
+        cursor.execute("SELECT 1 FROM Students WHERE student_id = ?", (student_id,))
+        if not cursor.fetchone():
+            return jsonify({"error": "Student not found"}), 404
+
+        # Unique receipt check (exclude current record)
+        if receipt_no:
+            cursor.execute("""
+                SELECT 1 FROM Payments WHERE receipt_no = ? AND payment_id <> ?
+            """, (receipt_no, payment_id))
+            if cursor.fetchone():
+                return jsonify({"error": "Duplicate receipt number"}), 400
+
+        # Update (with or without payment_date)
+        if payment_date:
+            cursor.execute("""
+                UPDATE Payments
+                SET student_id = ?, payment_method = ?, amount = ?, purpose = ?, status = ?, receipt_no = ?, payment_date = ?
+                WHERE payment_id = ?
+            """, (student_id, payment_method, amount, purpose, status, receipt_no, payment_date, payment_id))
+        else:
+            cursor.execute("""
+                UPDATE Payments
+                SET student_id = ?, payment_method = ?, amount = ?, purpose = ?, status = ?, receipt_no = ?
+                WHERE payment_id = ?
+            """, (student_id, payment_method, amount, purpose, status, receipt_no, payment_id))
+
+        conn.commit()
+        return jsonify({"message": "Payment updated successfully"})
+
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
+
 @app.route("/api/payments/<int:payment_id>", methods=["DELETE"])
 @login_required
 def api_delete_payment(payment_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Payments WHERE payment_id=?", (payment_id,))
-    conn.commit()
-    cursor.close()
-    conn.close()
-    return jsonify({"message": "Payment deleted successfully"})
+    try:
+        cursor.execute("DELETE FROM Payments WHERE payment_id = ?", (payment_id,))
+        if cursor.rowcount == 0:
+            return jsonify({"error": "Payment not found"}), 404
+        conn.commit()
+        return jsonify({"message": "Payment deleted successfully"})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({"error": str(e)}), 500
+    finally:
+        cursor.close()
+        conn.close()
+
 
 # ----------------------------------------
 # API ROUTES: MAINTENANCE
@@ -766,19 +1127,19 @@ def api_get_maintenance():
 def api_add_maintenance():
     try:
         data = request.get_json()
-
-        room_id = data.get("room_id")
-        issue = data.get("issue")
-        status = data.get("status")
-        reported_on = data.get("reported_on")  # Should be ISO format like "2025-07-18T14:30:00"
-
+         # Ensure required fields are present
+        room_id = int(data.get("room_id", 0 ))
+        issue_description = data.get("issue_description", "").strip() # JS calls it 'issue'
+        date_reported = data.get("date_reported", "").strip()
+        status = data.get("status", "").strip()
+        if not room_id or not issue_description or not date_reported and status:
+            return jsonify({"error": "Missing required fields"}), 400
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("""
-            INSERT INTO Maintenance (room_id, issue, status, reported_on)
+            INSERT INTO Maintenance (room_id, issue_description, date_reported, status)
             VALUES (?, ?, ?, ?)
-        """, (room_id, issue, status, reported_on))
-
+        """, (room_id, issue_description, date_reported, status))
         conn.commit()
         cursor.close()
         conn.close()
@@ -786,8 +1147,11 @@ def api_add_maintenance():
         return jsonify({"message": "Maintenance record added successfully"}), 201
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()  # Print the full traceback for debugging
         print("Error in POST /api/maintenance:", e)
         return jsonify({"error": str(e)}), 500
+
 
 
 # PUT: Update an existing maintenance record
@@ -807,7 +1171,7 @@ def api_update_maintenance(issue_id):
         """, (
             data["room_id"],
             data["issue_description"],
-            data["date_reported"],
+            data['date_reported'],
             data["status"],
             issue_id
         ))
@@ -823,13 +1187,13 @@ def api_update_maintenance(issue_id):
 
 
 # DELETE: Delete a maintenance record
-@app.route("/api/maintenance/<int:maintenance_id>", methods=["DELETE"])
+@app.route("/api/maintenance/<int:issue_id>", methods=["DELETE"])
 @login_required
-def api_delete_maintenance(maintenance_id):
+def api_delete_maintenance(issue_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM Maintenance WHERE maintenance_id = ?", (maintenance_id,))
+        cursor.execute("DELETE FROM Maintenance WHERE issue_id = ?", (issue_id,))
         conn.commit()
         cursor.close()
         conn.close()
@@ -843,7 +1207,6 @@ def api_delete_maintenance(maintenance_id):
 
     
     
-
 
 # ==========================
 #         ENTRY POINT

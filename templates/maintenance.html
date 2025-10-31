@@ -95,10 +95,19 @@
       <!-- FORM to be submitted -->
       <section>
         <h4 class="text-primary mb-4">Add or Edit Request</h4>
+       
+        <button
+          type="button"
+          class="btn btn-primary mb-3"
+          id="addMaintenanceBtn"
+        >
+          Add Maintenance
+        </button>
+
         <form id="maintenance-form" class="bg-white shadow rounded p-4">
           <div class="mb-3">
             <label for="issue_id" class="form-label">Issue ID</label>
-            <input type="text" id="issue_id" class="form-control" required />
+            <input type="text" id="issue_id" class="form-control" readonly/>
           </div>
 
           <div class="mb-3">
