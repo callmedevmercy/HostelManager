@@ -1,7 +1,7 @@
-# 🏠 HostelTrackerERP – Flask Web Application
+# 🏠 HostelManager– Flask Web Application
 
 ## 📖 Overview
-**HostelTrackerERP** is a hostel management system built using **Flask (Python)** and **PostgreSQL**.  
+**HostelManager** is a hostel management system built using **Flask (Python)** and **PostgreSQL**.  
 It helps administrators manage students, rooms, allocations, payments, and maintenance activities efficiently.  
 
 The project was developed during my **SIWES (Student Industrial Work Experience Scheme)** training at **Microware Solution Limited**, Ogudu, Lagos.
@@ -42,8 +42,8 @@ The project was developed during my **SIWES (Student Industrial Work Experience 
 
 **1. Clone the repository**
 ```bash
-git clone [https://github.com/callmedevmercy/hosteltrackererp.git](https://github.com/callmedevmercy/hosteltrackererp.git)
-cd hosteltrackererp
+git clone [https://github.com/callmedevmercy/HostelManager.git](https://github.com/callmedevmercy/HostelManager.git)
+cd HostelManager
 2. Create and activate a virtual environment
 
 Bash
