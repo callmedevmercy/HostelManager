@@ -24,9 +24,9 @@ The project was developed during my **SIWES (Student Industrial Work Experience 
 | Component | Technology |
 |------------|-------------|
 | **Backend** | Flask (Python) |
-| **Frontend** | HTML, CSS, JavaScript |
-| **Database** | Microsoft SQL Server (MSSQL) |
-| **ORM/Connection** | PyODBC |
+| **Frontend** | HTML, CSS,Vanilla JavaScript |
+| **Database** | PostgreSQL (Hosted on Render) |
+| **database driver** | psycopg2-binary |
 | **Environment Config** | python-dotenv |
 | **IDE Used** | Visual Studio Code (VS Code) |
 
@@ -43,105 +43,90 @@ The project was developed during my **SIWES (Student Industrial Work Experience 
 
 ---
 
-### **Installation Steps**
+Installation and Local Setup
+System Requirements
+Python 3.10 or later
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/HostelManager.git
-   cd HostelManager
-   ```
+Git
 
-2. **Create a virtual environment**
-   ```bash
-   python -m venv venv
-   venv\Scripts\activate
-   ```
+Steps to Run Locally
+1. Clone the repository
 
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
+Bash
+git clone https://github.com/callmedevmercy/hosteltrackererp.git
+cd hosteltrackererp
+2. Create and activate a virtual environment
 
-4. **Set up the database**
-   - Open SQL Server Management Studio (SSMS).  
-   - Create a database named **HostelManager**.  
-   - Run the SQL scripts provided in `/database/` to create all tables.
+Bash
+python -m venv venv
+venv\Scripts\activate
+3. Install dependencies
 
-5. **Create a `.env` file**
-   ```
-   DB_SERVER=localhost
-   DB_NAME=HostelManager
-   DB_USER=your_username
-   DB_PASSWORD=your_password
-   ```
+Bash
+pip install -r requirements.txt
+4. Set up the environment variables
+Create a .env file in the root directory. You will need your cloud database URL to connect:
 
-6. **Run the application**
-   ```bash
-   python app.py
-   ```
-   Visit `http://127.0.0.1:5000` in your browser.
+Plaintext
+DATABASE_URL=your_postgresql_database_url
+FLASK_SECRET_KEY=your_secret_key
+5. Initialize the Database
+Run the setup script to automatically build the tables in your PostgreSQL database and create the default admin account:
 
----
+Bash
+python setup_db.py
+6. Run the application
 
-##  Usage Guide
-- Log in as an admin.  
-- Register students and record their payments.  
-- Allocate rooms only to students who have completed payments.  
-- Update or view maintenance requests and overall statistics via the dashboard.
+Bash
+python app.py
+Visit http://127.0.0.1:5000 in your browser.
 
----
+Usage Guide
+Log in as an admin (Default setup credentials — Username: admin, Password: admin123).
 
-##  Folder Structure
-```
+Register students and record their payments.
+
+Allocate rooms only to students who have completed payments.
+
+Update or view maintenance requests and overall statistics via the dashboard.
+
+Folder Structure
+Plaintext
 HostelManager/
-│
-├── __pycache__
-      |app
 ├── static/
 │   ├── style.css
-│   └──allocation.js
-|   └──dashboard.js
-|   └──login.js
-|   └──maintenance.js
-|   └──payments.js
-|   └──rooms.js
-|   └──script.js
-|   └──students.js
+│   ├── allocation.js
+│   ├── dashboard.js
+│   ├── login.js
+│   ├── maintenance.js
+│   ├── payments.js
+│   ├── rooms.js
+│   ├── script.js
+│   └── students.js
 ├── templates/
 │   ├── index.html
 │   ├── students.html
 │   ├── rooms.html
 │   ├── allocations.html
 │   ├── payments.html
-│   └── maintenance.html
-|   └──login.html
-├── templates/
-│   ├── Include
-│   ├── Lib\site-packages/
-│   ├── Scripts/
-│   ├── gitignore
-│   └── pyvenv.cfg
-|   └──README.md
-|   
-│
-│
-├── .env
-├── requirements.txt
-└── README.md
-```
+│   ├── maintenance.html
+│   └── login.html
+├── venv/                  # Virtual Environment (Ignored in Git)
+├── .env                   # Environment Variables (Ignored in Git)
+├── .gitignore             # Git ignore rules
+├── app.py                 # Main Flask application
+├── requirements.txt       # Python dependencies
+├── setup_db.py            # Database initialization script
+└── README.md              # Project documentation
+Future Enhancements
+Add user authentication and personalized portals for students.
 
----
+Integrate online payment gateways (e.g., Paystack or Flutterwave) for automated payment verification.
 
-## Future Enhancements
-- Add user authentication for students.  
-- Integrate online payment gateways.  
-- Implement analytics dashboard.  
-- Deploy the system to a live server.
+Implement advanced analytics and visual charts on the admin dashboard.
 
----
-
-##  Author
-**Mercy Ottah-Nelson**  
-Department of Computer Science,  
-Lagos State University  
-**Supervisor:** Prof. Aribisala Benjamin  
+Author
+Mercy Ottah-Nelson
+Department of Computer Science,
+Lagos State University
+Supervisor: Prof. Aribisala Benjamin 
