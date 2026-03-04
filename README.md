@@ -1,59 +1,48 @@
+# 🏠 HostelTrackerERP – Flask Web Application
 
-# 🏠 HostelManager – Flask Web Application
-
-## Overview
-**HostelManager** is a hostel management system built using **Flask (Python)** and **Microsoft SQL Server (MSSQL)**.  
+## 📖 Overview
+**HostelTrackerERP** is a hostel management system built using **Flask (Python)** and **PostgreSQL**.  
 It helps administrators manage students, rooms, allocations, payments, and maintenance activities efficiently.  
+
 The project was developed during my **SIWES (Student Industrial Work Experience Scheme)** training at **Microware Solution Limited**, Ogudu, Lagos.
 
 ---
 
-##  Features
--  **Student Management** – Add, view, edit, and delete student records.  
--  **Room Management** – Create and monitor hostel rooms and capacity.  
--  **Allocation System** – Assign students to available rooms.  
--  **Payment Tracking** – Record and verify student payments.  
--  **Maintenance Reporting** – Log and update maintenance issues.  
--  **Dashboard** – View hostel statistics and reports in real-time.  
+## ✨ Features
+* **Student Management** – Add, view, edit, and delete student records.
+* **Room Management** – Create and monitor hostel rooms and capacity.
+* **Allocation System** – Assign students to available rooms.
+* **Payment Tracking** – Record and verify student payments with auto-generated receipt numbers.
+* **Maintenance Reporting** – Log and update maintenance issues.
+* **Dashboard** – View hostel statistics and reports in real-time.
 
-> **Note:** Students must complete **payment** before they can be allocated to a room.
+> ⚠️ **Note:** Students must complete **payment** before they can be allocated to a room.
 
 ---
 
-##  Tech Stack
+## 🛠️ Tech Stack
 | Component | Technology |
-|------------|-------------|
+| :--- | :--- |
 | **Backend** | Flask (Python) |
-| **Frontend** | HTML, CSS,Vanilla JavaScript |
+| **Frontend** | HTML, CSS, Vanilla JavaScript |
 | **Database** | PostgreSQL (Hosted on Render) |
-| **database driver** | psycopg2-binary |
-| **Environment Config** | python-dotenv |
+| **Database Driver** | `psycopg2-binary` |
+| **Environment Config**| `python-dotenv` |
 | **IDE Used** | Visual Studio Code (VS Code) |
 
 ---
 
-##  Installation and Setup
+## 🚀 Installation and Local Setup
 
-### **System Requirements**
-- Python 3.10 or later  
-- Microsoft SQL Server 2019 or later  
-- SQL Server Management Studio (SSMS)  
-- Visual Studio Code  
-- Git (optional)
+### System Requirements
+* Python 3.10 or later
+* Git
 
----
+### Steps to Run Locally
 
-Installation and Local Setup
-System Requirements
-Python 3.10 or later
-
-Git
-
-Steps to Run Locally
-1. Clone the repository
-
-Bash
-git clone https://github.com/callmedevmercy/hosteltrackererp.git
+**1. Clone the repository**
+```bash
+git clone [https://github.com/callmedevmercy/hosteltrackererp.git](https://github.com/callmedevmercy/hosteltrackererp.git)
 cd hosteltrackererp
 2. Create and activate a virtual environment
 
@@ -81,7 +70,7 @@ Bash
 python app.py
 Visit http://127.0.0.1:5000 in your browser.
 
-Usage Guide
+💻 Usage Guide
 Log in as an admin (Default setup credentials — Username: admin, Password: admin123).
 
 Register students and record their payments.
@@ -90,7 +79,7 @@ Allocate rooms only to students who have completed payments.
 
 Update or view maintenance requests and overall statistics via the dashboard.
 
-Folder Structure
+📂 Folder Structure
 Plaintext
 HostelManager/
 ├── static/
@@ -118,15 +107,14 @@ HostelManager/
 ├── requirements.txt       # Python dependencies
 ├── setup_db.py            # Database initialization script
 └── README.md              # Project documentation
-Future Enhancements
+🔮 Future Enhancements
 Add user authentication and personalized portals for students.
 
 Integrate online payment gateways (e.g., Paystack or Flutterwave) for automated payment verification.
 
 Implement advanced analytics and visual charts on the admin dashboard.
 
-Author
-Mercy Ottah-Nelson
-Department of Computer Science,
-Lagos State University
-Supervisor: Prof. Aribisala Benjamin 
+👩‍💻 Author
+Mercy Ottah-Nelson Department of Computer Science, Lagos State University
+
+Supervisor: Prof. Aribisala Benjamin
