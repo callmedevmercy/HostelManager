@@ -27,7 +27,7 @@ from flask_cors import CORS
 
 # pyodbc is a Python library that lets your app connect and run SQL queries 
 # on Microsoft SQL Server databases
-import pyodbc
+import psycopg2  # PostgreSQL adapter for Python (use psycopg2 for PostgreSQL databases)
 
 # os provides access to environment variables and operating system features
 # (useful for reading sensitive information like database credentials)
@@ -69,7 +69,7 @@ def _get_unique_receipt_no(cursor, max_attempts: int = 5) -> str:
     """Try a few times to avoid collisions (DB also has UNIQUE constraint)."""
     for _ in range(max_attempts):
         candidate = _generate_receipt_no()
-        cursor.execute("SELECT 1 FROM Payments WHERE receipt_no = ?", (candidate,))
+        cursor.execute("SELECT 1 FROM Payments WHERE receipt_no = %s", (candidate,))
         if not cursor.fetchone():
             return candidate
     raise Exception("Could not generate a unique receipt number after several attempts")
@@ -85,17 +85,19 @@ CORS(app)
 # Secret key for sessions (should be set in .env for production)
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key')
 
+
 # ============================
 #   DATABASE CONNECTION SETUP
 # ============================
 def get_db_connection():
-    return pyodbc.connect(
-        f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-        f"SERVER={os.getenv('DB_SERVER')};"
-        f"DATABASE={os.getenv('DB_NAME')};"
-        f"UID={os.getenv('DB_USER')};"
-        f"PWD={os.getenv('DB_PASSWORD')}"
-    )
+    # We will put Render's Internal Database URL into this environment variable later
+    database_url = os.getenv('DATABASE_URL')
+    
+    # If working locally without the URL, print a warning
+    if not database_url:
+        raise ValueError("No DATABASE_URL set for Flask application")
+        
+    return psycopg2.connect(database_url)
 
 # ============================
 #         AUTHENTICATION
@@ -149,7 +151,7 @@ def login():
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT username, password FROM Admins WHERE username = ? AND password = ?", 
+            "SELECT username, password FROM Admins WHERE username = %s AND password = %s", 
             (username, password)
         )
         admin = cursor.fetchone()
@@ -244,7 +246,7 @@ def add_student():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO Students (name, matric_number, department, level, gender) VALUES (?, ?, ?, ?, ?)",
+        "INSERT INTO Students (name, matric_number, department, level, gender) VALUES (%s, %s, %s, %s, %s)",
         (data['name'], data['matric_number'], data['department'], data['level'], data['gender'])
     )
     conn.commit()
@@ -258,7 +260,7 @@ def update_student(student_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE Students SET name=?, matric_number=?, department=?, level=?, gender=? WHERE student_id=?",
+        "UPDATE Students SET name=%s, matric_number=%s, department=%s, level=%s, gender=%s WHERE student_id=%s",
         (data['name'], data['matric_number'], data['department'], data['level'], data['gender'], student_id)
     )
     conn.commit()
@@ -270,7 +272,7 @@ def update_student(student_id):
 def delete_student(student_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Students WHERE student_id=?", (student_id))
+    cursor.execute("DELETE FROM Students WHERE student_id=%s", (student_id))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Student deleted successfully'})
@@ -295,8 +297,8 @@ def add_room():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO Rooms (hostel_name, room_number, capacity, current_occupants) VALUES (?, ?, ?, ?)",
-        data['hostel_name'], data['room_number'], data['capacity'], data['current_occupants']
+        "INSERT INTO Rooms (hostel_name, room_number, capacity, current_occupants) VALUES (%s, %s, %s, %s)",
+        (data['hostel_name'], data['room_number'], data['capacity'], data['current_occupants'])
     )
     conn.commit()
     conn.close()
@@ -309,8 +311,8 @@ def update_room(room_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE Rooms SET hostel_name=?, room_number=?, capacity=?, current_occupants=? WHERE room_id=?",
-        data['hostel_name'], data['room_number'], data['capacity'], data['current_occupants'], room_id
+        "UPDATE Rooms SET hostel_name=%s, room_number=%s, capacity=%s, current_occupants=%s WHERE room_id=%s",
+        (data['hostel_name'], data['room_number'], data['capacity'], data['current_occupants'], room_id)
     )
     conn.commit()
     conn.close()
@@ -321,7 +323,7 @@ def update_room(room_id):
 def delete_room(room_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Rooms WHERE room_id=?", room_id)
+    cursor.execute("DELETE FROM Rooms WHERE room_id=%s", room_id)
     conn.commit()
     conn.close()
     return jsonify({'message': 'Room deleted successfully'})
@@ -356,8 +358,8 @@ def add_allocation():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO Allocations (student_id, room_id, date_allocated) VALUES (?, ?, ?)",
-        data['student_id'], data['room_id'], data['date_allocated']
+        "INSERT INTO Allocations (student_id, room_id, date_allocated) VALUES (%s, %s, %s)",
+        (data['student_id'], data['room_id'], data['date_allocated'])
     )
     conn.commit()
     conn.close()
@@ -370,8 +372,8 @@ def update_allocation(allocation_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE Allocations SET student_id=?, room_id=?, date_allocated=? WHERE allocations_id=?",
-        data['student_id'], data['room_id'], data['date_allocated'], allocation_id
+        "UPDATE Allocations SET student_id=%s, room_id=%s, date_allocated=%s WHERE allocations_id=%s",
+        (data['student_id'], data['room_id'], data['date_allocated'], allocation_id)
     )
     conn.commit()
     conn.close()
@@ -382,7 +384,7 @@ def update_allocation(allocation_id):
 def delete_allocation(allocation_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Allocations WHERE allocations_id=?", allocation_id)
+    cursor.execute("DELETE FROM Allocations WHERE allocations_id=%s", (allocation_id,))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Allocation deleted successfully'})
@@ -412,8 +414,8 @@ def add_payment():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO Payments (student_id, payment_method, purpose, status) VALUES (?, ?, ?, ?)",
-        data['student_id'], data['payment_method'], data['purpose'], data['status']
+        "INSERT INTO Payments (student_id, payment_method, purpose, status) VALUES (%s, %s, %s, %s)",
+        (data['student_id'], data['payment_method'], data['purpose'], data['status'])
     )
     conn.commit()
     conn.close()
@@ -426,8 +428,8 @@ def update_payment(payment_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE Payments SET student_id=?, payment_method=?, purpose=?, status=? WHERE payment_id=?",
-        data['student_id'], data['payment_method'], data['purpose'], data['status'], payment_id
+        "UPDATE Payments SET student_id=%s, payment_method=%s, purpose=%s, status=%s WHERE payment_id=%s",
+        (data['student_id'], data['payment_method'], data['purpose'], data['status'], payment_id)
     )
     conn.commit()
     conn.close()
@@ -438,7 +440,7 @@ def update_payment(payment_id):
 def delete_payment(payment_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Payments WHERE payment_id=?", payment_id)
+    cursor.execute("DELETE FROM Payments WHERE payment_id=%s", (payment_id,))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Payment deleted successfully'})
@@ -463,8 +465,8 @@ def add_maintenance():
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "INSERT INTO Maintenance (room_id, issue_description, status, reported_date) VALUES (?, ?, ?, ?)",
-        data['room_id'], data['issue_description'], data['status'], data['reported_date']
+        "INSERT INTO Maintenance (room_id, issue_description, status, reported_date) VALUES (%s, %s, %s, %s)",
+        (data['room_id'], data['issue_description'], data['status'], data['reported_date'])
     )
     conn.commit()
     conn.close()
@@ -477,8 +479,8 @@ def update_maintenance(maintenance_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(
-        "UPDATE Maintenance SET room_id=?, issue_description=?, status=?, reported_date=? WHERE maintenance_id=?",
-        data['room_id'], data['issue_description'], data['status'], data['reported_date'], maintenance_id
+        "UPDATE Maintenance SET room_id=%s, issue_description=%s, status=%s, reported_date=%s WHERE maintenance_id=%s",
+        (data['room_id'], data['issue_description'], data['status'], data['reported_date'], maintenance_id)
     )
     conn.commit()
     conn.close()
@@ -489,7 +491,7 @@ def update_maintenance(maintenance_id):
 def delete_maintenance(maintenance_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Maintenance WHERE maintenance_id=?", maintenance_id)
+    cursor.execute("DELETE FROM Maintenance WHERE maintenance_id=%s", (maintenance_id,))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Maintenance issue deleted successfully'})
@@ -531,7 +533,7 @@ def api_create_student():
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO Students (name, matric_number, department, level, gender)
-        VALUES (?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s)
     """, (data["name"], data["matric_number"], data["department"], data["level"], data["gender"]))
     conn.commit()
     cursor.close()
@@ -547,8 +549,8 @@ def api_update_student(student_id):
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE Students
-        SET name=?, matric_number=?, department=?, level=?, gender=?
-        WHERE student_id=?
+        SET name=%s, matric_number=%s, department=%s, level=%s, gender=%s
+        WHERE student_id=%s
     """, (data["name"], data["matric_number"], data["department"], data["level"], data["gender"], student_id))
     conn.commit()
     cursor.close()
@@ -565,11 +567,11 @@ def api_delete_student(student_id):
 
     try:
         # Step 1: Check for Allocations
-        cursor.execute("SELECT COUNT(*) FROM Allocations WHERE student_id = ?", (student_id,))
+        cursor.execute("SELECT COUNT(*) FROM Allocations WHERE student_id = %s", (student_id,))
         allocation_count = cursor.fetchone()[0]
 
         # Step 2: Check for Payments
-        cursor.execute("SELECT COUNT(*) FROM Payments WHERE student_id = ?", (student_id,))
+        cursor.execute("SELECT COUNT(*) FROM Payments WHERE student_id = %s", (student_id,))
         payment_count = cursor.fetchone()[0]
 
         if allocation_count > 0 or payment_count > 0:
@@ -585,7 +587,7 @@ def api_delete_student(student_id):
             }), 400
 
         # Step 3: Safe to delete
-        cursor.execute("DELETE FROM Students WHERE student_id = ?", (student_id,))
+        cursor.execute("DELETE FROM Students WHERE student_id = %s", (student_id,))
         conn.commit()
 
         return jsonify({"message": "Student deleted successfully"}), 200
@@ -678,7 +680,7 @@ def api_create_room():
     cursor = conn.cursor()
     cursor.execute("""
         INSERT INTO Rooms (hostel_name, room_number, capacity, current_occupants)
-        VALUES (?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s)
     """, (data["hostel_name"], data["room_number"], data["capacity"], data["current_occupants"]))
     conn.commit()
     cursor.close()
@@ -694,8 +696,8 @@ def api_update_room(room_id):
     cursor = conn.cursor()
     cursor.execute("""
         UPDATE Rooms
-        SET hostel_name=?, room_number=?, capacity=?, current_occupants=?
-        WHERE room_id=?
+        SET hostel_name=%s, room_number=%s, capacity=%s, current_occupants=%s
+        WHERE room_id=%s
     """, (data["hostel_name"], data["room_number"], data["capacity"], data["current_occupants"], room_id))
     conn.commit()
     cursor.close()
@@ -710,7 +712,7 @@ def api_delete_room(room_id):
     cursor = conn.cursor()
 
     # Check for allocations first
-    cursor.execute("SELECT COUNT(*) FROM Allocations WHERE room_id = ?", (room_id,))
+    cursor.execute("SELECT COUNT(*) FROM Allocations WHERE room_id = %s", (room_id,))
     count = cursor.fetchone()[0]
 
     if count > 0:
@@ -719,7 +721,7 @@ def api_delete_room(room_id):
         return jsonify({"error": "Room cannot be deleted. It is currently allocated."}), 400
 
     # Safe to delete
-    cursor.execute("DELETE FROM Rooms WHERE room_id = ?", (room_id,))
+    cursor.execute("DELETE FROM Rooms WHERE room_id = %s", (room_id,))
     conn.commit()
     cursor.close()
     conn.close()
@@ -788,19 +790,19 @@ def api_create_allocation():
         cursor.execute("""
             SELECT TOP 1 1
             FROM Payments
-            WHERE student_id = ? AND status = 'Paid'
+            WHERE student_id = %s AND status = 'Paid'
         """, (student_id,))
         has_paid = cursor.fetchone()
         if not has_paid:
             return jsonify({"error": "Payment required before allocation"}), 403
 
         # ✅ Check if student is already allocated
-        cursor.execute("SELECT 1 FROM Allocations WHERE student_id = ?", (student_id,))
+        cursor.execute("SELECT 1 FROM Allocations WHERE student_id = %s", (student_id,))
         if cursor.fetchone():
             return jsonify({"error": "Student already has an allocation"}), 400
 
         # ✅ Check room exists & capacity
-        cursor.execute("SELECT capacity, current_occupants FROM Rooms WHERE room_id = ?", (room_id,))
+        cursor.execute("SELECT capacity, current_occupants FROM Rooms WHERE room_id = %s", (room_id,))
         room = cursor.fetchone()
         if not room:
             return jsonify({"error": "Room not found"}), 404
@@ -812,11 +814,11 @@ def api_create_allocation():
         # 🔁 Transaction: insert allocation + bump occupants
         cursor.execute("""
             INSERT INTO Allocations (student_id, room_id, date_allocated)
-            VALUES (?, ?, ?)
+            VALUES (%s, %s, %s)
         """, (student_id, room_id, date_allocated))
         cursor.execute("""
             UPDATE Rooms SET current_occupants = current_occupants + 1
-            WHERE room_id = ?
+            WHERE room_id = %s
         """, (room_id,))
         conn.commit()
         return jsonify({"message": "Allocation created successfully"}), 201
@@ -842,7 +844,7 @@ def api_update_allocation(allocations_id):
     cursor = conn.cursor()
 
     # 1. Get current allocation details
-    cursor.execute("SELECT room_id, student_id FROM Allocations WHERE allocations_id=?", (allocations_id,))
+    cursor.execute("SELECT room_id, student_id FROM Allocations WHERE allocations_id=%s", (allocations_id,))
     current_allocation = cursor.fetchone()
     if not current_allocation:
         cursor.close()
@@ -853,7 +855,7 @@ def api_update_allocation(allocations_id):
 
     # 2. If moving to a new room, check capacity
     if old_room_id != new_room_id:
-        cursor.execute("SELECT capacity, current_occupants FROM Rooms WHERE room_id=?", (new_room_id,))
+        cursor.execute("SELECT capacity, current_occupants FROM Rooms WHERE room_id=%s", (new_room_id,))
         room = cursor.fetchone()
         if not room:
             cursor.close()
@@ -869,14 +871,14 @@ def api_update_allocation(allocations_id):
     # 3. Update the allocation record
     cursor.execute("""
         UPDATE Allocations
-        SET student_id=?, room_id=?
-        WHERE allocations_id=?
+        SET student_id=%s, room_id=%s
+        WHERE allocations_id=%s
     """, (new_student_id, new_room_id, allocations_id))
 
     # 4. Update occupants if the room changed
     if old_room_id != new_room_id:
-        cursor.execute("UPDATE Rooms SET current_occupants = current_occupants - 1 WHERE room_id=?", (old_room_id,))
-        cursor.execute("UPDATE Rooms SET current_occupants = current_occupants + 1 WHERE room_id=?", (new_room_id,))
+        cursor.execute("UPDATE Rooms SET current_occupants = current_occupants - 1 WHERE room_id=%s", (old_room_id,))
+        cursor.execute("UPDATE Rooms SET current_occupants = current_occupants + 1 WHERE room_id=%s", (new_room_id,))
 
     conn.commit()
     cursor.close()
@@ -892,7 +894,7 @@ def api_delete_allocation(allocations_id):
     cursor = conn.cursor()
 
     # 1. Find allocation before deleting
-    cursor.execute("SELECT room_id FROM Allocations WHERE allocations_id=?", (allocations_id,))
+    cursor.execute("SELECT room_id FROM Allocations WHERE allocations_id=", (allocations_id,))
     allocation = cursor.fetchone()
     if not allocation:
         cursor.close()
@@ -902,10 +904,10 @@ def api_delete_allocation(allocations_id):
     room_id = allocation[0]
 
     # 2. Delete the allocation
-    cursor.execute("DELETE FROM Allocations WHERE allocations_id=?", (allocations_id,))
+    cursor.execute("DELETE FROM Allocations WHERE allocations_id=%s", (allocations_id,))
 
     # 3. Reduce occupants count for that room
-    cursor.execute("UPDATE Rooms SET current_occupants = current_occupants - 1 WHERE room_id=?", (room_id,))
+    cursor.execute("UPDATE Rooms SET current_occupants = current_occupants - 1 WHERE room_id=%s", (room_id,))
 
     conn.commit()
     cursor.close()
@@ -978,7 +980,7 @@ def api_add_payment():
             return jsonify({"error": "Missing required fields"}), 400
 
         # Ensure student exists
-        cursor.execute("SELECT 1 FROM Students WHERE student_id = ?", (student_id,))
+        cursor.execute("SELECT 1 FROM Students WHERE student_id = %s", (student_id,))
         if not cursor.fetchone():
             return jsonify({"error": "Student not found"}), 404
 
@@ -995,12 +997,12 @@ def api_add_payment():
         if payment_date:
             cursor.execute("""
                 INSERT INTO Payments (student_id, payment_method, amount, purpose, status, receipt_no, payment_date)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (student_id, payment_method, amount, purpose, status, receipt_no, payment_date))
         else:
             cursor.execute("""
                 INSERT INTO Payments (student_id, payment_method, amount, purpose, status, receipt_no)
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s)
             """, (student_id, payment_method, amount, purpose, status, receipt_no))
 
         conn.commit()
@@ -1033,19 +1035,19 @@ def api_update_payment(payment_id):
     cursor = conn.cursor()
     try:
         # Ensure payment exists
-        cursor.execute("SELECT 1 FROM Payments WHERE payment_id = ?", (payment_id,))
+        cursor.execute("SELECT 1 FROM Payments WHERE payment_id = %s", (payment_id,))
         if not cursor.fetchone():
             return jsonify({"error": "Payment not found"}), 404
 
         # Validate student exists
-        cursor.execute("SELECT 1 FROM Students WHERE student_id = ?", (student_id,))
+        cursor.execute("SELECT 1 FROM Students WHERE student_id = %s", (student_id,))
         if not cursor.fetchone():
             return jsonify({"error": "Student not found"}), 404
 
         # Unique receipt check (exclude current record)
         if receipt_no:
             cursor.execute("""
-                SELECT 1 FROM Payments WHERE receipt_no = ? AND payment_id <> ?
+                SELECT 1 FROM Payments WHERE receipt_no = %s AND payment_id <> %s
             """, (receipt_no, payment_id))
             if cursor.fetchone():
                 return jsonify({"error": "Duplicate receipt number"}), 400
@@ -1054,14 +1056,15 @@ def api_update_payment(payment_id):
         if payment_date:
             cursor.execute("""
                 UPDATE Payments
-                SET student_id = ?, payment_method = ?, amount = ?, purpose = ?, status = ?, receipt_no = ?, payment_date = ?
-                WHERE payment_id = ?
+                SET student_id = %s, payment_method = %s, amount = %s, purpose = %s, status = %s, receipt_no = %s, payment_date = %
+s
+                WHERE payment_id = %s
             """, (student_id, payment_method, amount, purpose, status, receipt_no, payment_date, payment_id))
         else:
             cursor.execute("""
                 UPDATE Payments
-                SET student_id = ?, payment_method = ?, amount = ?, purpose = ?, status = ?, receipt_no = ?
-                WHERE payment_id = ?
+                SET student_id = %s, payment_method = %s, amount = %s, purpose = %s, status = %s, receipt_no = %s
+                WHERE payment_id = %s
             """, (student_id, payment_method, amount, purpose, status, receipt_no, payment_id))
 
         conn.commit()
@@ -1081,7 +1084,7 @@ def api_delete_payment(payment_id):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute("DELETE FROM Payments WHERE payment_id = ?", (payment_id,))
+        cursor.execute("DELETE FROM Payments WHERE payment_id = %s", (payment_id,))
         if cursor.rowcount == 0:
             return jsonify({"error": "Payment not found"}), 404
         conn.commit()
@@ -1138,7 +1141,7 @@ def api_add_maintenance():
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO Maintenance (room_id, issue_description, date_reported, status)
-            VALUES (?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s)
         """, (room_id, issue_description, date_reported, status))
         conn.commit()
         cursor.close()
@@ -1166,8 +1169,8 @@ def api_update_maintenance(issue_id):
         cursor = conn.cursor()
         cursor.execute("""
             UPDATE Maintenance
-            SET room_id = ?, issue_description = ?, date_reported = ?, status = ?
-            WHERE issue_id = ?
+            SET room_id = %s, issue_description = %s, date_reported = %s, status = %s
+            WHERE issue_id = %s
         """, (
             data["room_id"],
             data["issue_description"],
@@ -1193,7 +1196,7 @@ def api_delete_maintenance(issue_id):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM Maintenance WHERE issue_id = ?", (issue_id,))
+        cursor.execute("DELETE FROM Maintenance WHERE issue_id = %s", (issue_id,))
         conn.commit()
         cursor.close()
         conn.close()
