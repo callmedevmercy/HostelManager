@@ -272,7 +272,7 @@ def update_student(student_id):
 def delete_student(student_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Students WHERE student_id=%s", (student_id))
+    cursor.execute("DELETE FROM Students WHERE student_id=%s", (student_id,))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Student deleted successfully'})
@@ -323,7 +323,7 @@ def update_room(room_id):
 def delete_room(room_id):
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("DELETE FROM Rooms WHERE room_id=%s", room_id)
+    cursor.execute("DELETE FROM Rooms WHERE room_id=%s", (room_id,))
     conn.commit()
     conn.close()
     return jsonify({'message': 'Room deleted successfully'})
@@ -788,16 +788,17 @@ def api_create_allocation():
         # 🔒 Require at least one successful payment before allocation
         # If you want to require a specific purpose (e.g., Hostel Fee), add AND purpose = 'Hostel Fee'
         cursor.execute("""
-            SELECT TOP 1 1
+            SELECT 1
             FROM Payments
             WHERE student_id = %s AND status = 'Paid'
+            LIMIT 1
         """, (student_id,))
         has_paid = cursor.fetchone()
         if not has_paid:
             return jsonify({"error": "Payment required before allocation"}), 403
 
         # ✅ Check if student is already allocated
-        cursor.execute("SELECT 1 FROM Allocations WHERE student_id = %s", (student_id,))
+        cursor.execute("SELECT 1 FROM Allocations WHERE student_id = %s LIMIT 1", (student_id,))
         if cursor.fetchone():
             return jsonify({"error": "Student already has an allocation"}), 400
 
@@ -894,7 +895,7 @@ def api_delete_allocation(allocations_id):
     cursor = conn.cursor()
 
     # 1. Find allocation before deleting
-    cursor.execute("SELECT room_id FROM Allocations WHERE allocations_id=", (allocations_id,))
+    cursor.execute("SELECT room_id FROM Allocations WHERE allocations_id= %s", (allocations_id,))
     allocation = cursor.fetchone()
     if not allocation:
         cursor.close()
